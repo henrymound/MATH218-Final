@@ -30,8 +30,8 @@ hc1 <- hclust(cs_dist)
 plot(hc1, cex = .5)
 
 #let's try to clean up the output
-install.packages('dendextend')
-install.packages('circlize')
+#install.packages('dendextend')
+#install.packages('circlize')
 library(dendextend)
 library(circlize)
 
@@ -50,7 +50,7 @@ pca1 <- prcomp(clinical_spectrum_numbers,
                scale. = TRUE)
 
 #Let's make a plot predicting test result from the other values using PCA
-install.packages('pls')
+#install.packages('pls')
 library(pls)
 
 validationplot(pca1)
