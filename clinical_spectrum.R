@@ -10,14 +10,29 @@ clinical_spectrum <- read_csv('clinical-spectrum.csv')
 
 head(clinical_spectrum)
 
+
 clinical_spectrum_filtered <- clinical_spectrum[,c(1:39)]
 
 clinical_spectrum_filtered <- clinical_spectrum_filtered[,-c(21, 28)]
+
+clinical_spectrum_filtered[,c('influenza_a')] %>%
+  na.omit() %>%
+  mutate(status = ifelse(influenza_a == 'not_detected', 0, 1)) %>%
+  summarize(prop = mean(status))
+
+clinical_spectrum_filtered %>%
+  filter(sars_cov_2_exam_result == 'positive') %>%
+  summarize(prop_positive= n() / nrow(clinical_spectrum_filtered))
+
+
 
 clinical_spectrum_clean <- clinical_spectrum_filtered %>%
   na.omit()
 
 clinical_spectrum_numbers <- clinical_spectrum_clean[,c(7:20)]
+
+clinical_spectrum_clean %>%
+  filter(sars_cov_2_exam_result == 'positive')
 
 #scale the clinical spectrum values; this data frame only includes the common objective reported stats
 cs_numbers_scaled <- scale(clinical_spectrum_numbers)
@@ -169,6 +184,63 @@ gathered_likely_positive_comparison %>%
            position = 'dodge') +
   coord_flip()
 
+
+## Let's try some different models to try to predict positive test results
+
+#first a caret random forest
+
+library(caret)
+library(randomForest)
+library(ipred)
+
+#cleaning data before implementing random forest
+clinical_spectrum_clean_rf <- clinical_spectrum_clean[,-c(1,4:6,)]
+
+clinical_spectrum_clean_rf <- clinical_spectrum_clean_rf %>%
+  mutate(exam_result = ifelse(sars_cov_2_exam_result == 'negative', 0, 1))
+
+clinical_spectrum_clean_rf <- clinical_spectrum_clean_rf[,-c(2)]
+
+#test train split
+rf_indexes <- sample(nrow(clinical_spectrum_clean_rf),
+                     .7*nrow(clinical_spectrum_clean_rf),
+                     replace = FALSE)
+
+rf_indexes
+
+rf_train = clinical_spectrum_clean_rf[rf_indexes,]
+rf_test = clinical_spectrum_clean_rf[-rf_indexes,]
+
+rf1 <- randomForest(factor(exam_result) ~ .,
+                    data = rf_train)
+
+bag1 <- bagging(exam_result ~ .,
+                data = clinical_spectrum_clean_rf)
+
+varImpPlot(rf1)
+varImpPlot
+
+?train
+
+tune.grid = expand.grid(mtry = c(9, 12, 15),
+                        splitrule = c('gini','extratrees'),
+                        min.node.size = 1)
+
+
+ranger1 <- train(factor(exam_result) ~ ., 
+            data = rf_train,
+            method = "ranger",
+            tuneGrid = tune.grid)
+
+ranger1
+
+#create a confusion matrix
+
+predict(ranger1, rf_test)
+
+table(predict(ranger1, rf_test), rf_test$exam_result)
+
+plot(ranger1)
 
 
 
