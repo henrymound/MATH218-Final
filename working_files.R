@@ -1,173 +1,37 @@
 ### Statistical Learning Final Project
+# Challenge: https://www.kaggle.com/roche-data-science-coalition/uncover
 
 library(tidyverse)
 
 
-#Goal 1: Use unsupervised learning to explore the data.
-# eg. Dendr ogram, Kmeans, Heirarchical
+#Investigation Question
+## Which patient populations pass away from COVID-19?
+  
+#Task Details:
+#The Roche Data Science Coalition is a group of like-minded public
+# and private organizations with a common mission and vision to bring
+# actionable intelligence to patients, frontline healthcare providers,
+# institutions, supply chains, and government. The tasks associated with
+# this dataset were developed and evaluated by global frontline healthcare
+# providers, hospitals, suppliers, and policy makers. They represent key
+# research questions where insights developed by the Kaggle community can be
+# most impactful in the areas of at-risk population evaluation and capacity management.
+
+#Evaluation
+#One submission will be identified as the best response to the research question
+# posed in this task on the timeline outlined below. That submission will be
+# marked as the “accepted solution” to that task, and will be reevaluated
+# by the next deadline against the new research contributed to that task.
+
+# Submissions will be reviewed on a rolling basis, so participants are 
+# encouraged to work publicly and collaboratively to accelerate the research
+# available for each task.
 
 clinical_spectrum <- read_csv('clinical-spectrum.csv')
-
-head(clinical_spectrum)
-
-clinical_spectrum_filtered <- clinical_spectrum[,c(1:39)]
-
-clinical_spectrum_filtered <- clinical_spectrum_filtered[,-c(21, 28)]
-
-clinical_spectrum_clean <- clinical_spectrum_filtered %>%
-  na.omit()
-
-clinical_spectrum_numbers <- clinical_spectrum_clean[,c(7:20)]
-
-#scale the clinical spectrum values; this data frame only includes the common objective reported stats
-cs_numbers_scaled <- scale(clinical_spectrum_numbers)
-
-#calculate a distance matrix
-cs_dist <- dist(cs_numbers_scaled)
-
-hc1 <- hclust(cs_dist)
-
-plot(hc1, cex = .5)
-
-#let's try to clean up the output
-#install.packages('dendextend')
-#install.packages('circlize')
-library(dendextend)
-library(circlize)
-
-#display dendrogram with the positive test results underneath the clusters
-hc1 %>%
-  as.dendrogram() %>%
-  place_labels(clinical_spectrum_clean$sars_cov_2_exam_result) %>%
-  set('labels_cex', .3) %>%
-  color_branches(k = 4) %>%
-  color_unique_labels() %>%
-  plot()
-
-
-#ok let's try to reduce our variables using PCA
-pca1 <- prcomp(clinical_spectrum_numbers,
-               scale. = TRUE)
-
-#Let's make a plot predicting test result from the other values using PCA
-#install.packages('pls')
-library(pls)
-
-validationplot(pca1)
-
-#first append the test results back onto the numbers data frame
-cs_numbers_results <- cbind(clinical_spectrum_numbers, clinical_spectrum_clean$sars_cov_2_exam_result)
-
-cs_for_pca <- cs_numbers_results %>%
-  mutate(test_result = ifelse(`clinical_spectrum_clean$sars_cov_2_exam_result` == 'negative', 0, 1))
-
-cs_for_pca <- cs_for_pca[,-c(15)]
-
-pca2 <- pcr(test_result ~ .,
-               data = cs_for_pca,
-               scale = TRUE)
-
-validationplot(pca2)
-
-biplot(pca1)
-
-
-km1 <- kmeans(cs_numbers_scaled,
-              3)
-
-view(cs_numbers_scaled)
-
-cs_numbers_scaled %>%
-  as.data.frame() %>%
-  mutate(cluster = km1$cluster) %>%
-  ggplot(aes(x = platelets,
-             y = hemoglobin)) +
-  geom_point(aes(color = factor(cluster)))
- 
-
-km2 <- kmeans(cs_for_pca,
-              3)  
-
-
-cs_for_pca %>%
-  as.data.frame() %>%
-  mutate(cluster = km2$cluster) %>%
-  ggplot(aes(x = platelets,
-             y = hemoglobin)) +
-  geom_point(aes(color = factor(cluster))) +
-  geom_point(aes(color = factor(test_result)))
-
-
-cs_for_pca %>%
-  mutate(cluster = km2$cluster) %>%
-  group_by(cluster) %>%
-  summarize(proportion_positive = mean(test_result),
-            cluster_size = n(),
-            mean_hematocrit = mean(hematocrit),
-            mean_hemoglobin = mean(hemoglobin))
-
-
-tot <- NULL
-for(i in 1:50){
-  km <- kmeans(cs_for_pca,
-               i)
-  
-  tot[i] <- km$tot.withinss/i
-}
-
-plot(tot)
-
-km3 <- kmeans(cs_for_pca,
-        30)
-
-likely_positive_comparison <- cs_for_pca %>%
-  mutate(cluster = km3$cluster) %>%
-  group_by(cluster) %>%
-  summarize(proportion_positive = mean(test_result),
-            cluster_size = n(),
-            mean_hematocrit = mean(hematocrit),
-            mean_hemoglobin = mean(hemoglobin),
-            mean_platelets = mean(platelets),
-            mean_platelet_volume = mean(mean_platelet_volume),
-            mean_rbc = mean(red_blood_cells),
-            mean_lymphocytes = mean(lymphocytes),
-            mean_corpuscular_hemoglobin_concentration_mchc = mean(mean_corpuscular_hemoglobin_concentration_mchc),
-            mean_leukocytes = mean(leukocytes),
-            mean_basophils = mean(basophils),
-            mean_corpuscular_hemoglobin_mch = mean(mean_corpuscular_hemoglobin_mch),
-            mean_eosinophils = mean(eosinophils),
-            mean_mcv = mean(mean_corpuscular_volume_mcv),
-            mean_monocytes = mean(monocytes),
-            mean_rdw = mean(red_blood_cell_distribution_width_rdw)) %>%
-  arrange(-proportion_positive) %>%
-  mutate(likely_positive = ifelse(proportion_positive>= 0.25, 1, 0)) %>%
-  group_by(likely_positive) %>%
-  select(-c(cluster, cluster_size)) %>%
-  summarize_all(mean)
-
-view(likely_positive_comparison)
-
-gathered_likely_positive_comparison <- likely_positive_comparison %>%
-  gather(key = 'likely_positive',
-         value = 'blood_comparison',
-         -likely_positive) %>%
-  mutate(category = ifelse(row_number()%%2 == 0, 1, 0))
-
-
-gathered_likely_positive_comparison %>%
-  ggplot(aes(x = likely_positive,
-             y = factor(blood_comparison))) +
-  geom_bar(stat = 'identity',
-           position = 'dodge',
-           aes(fill = category))
-
-gathered_likely_positive_comparison %>%
-  ggplot(aes(x = likely_positive,
-             y = blood_comparison,
-             fill = factor(category))) +
-  geom_bar(stat = 'identity',
-           position = 'dodge') +
-  coord_flip()
+esri_covid <- read_csv('uncover/esri_covid-19/esri_covid-19/cdcs-social-vulnerability-index-svi-2016-overall-svi-census-tract-level.csv')
+jh <- read_csv('uncover/johns_hopkins_csse/2019-novel-coronavirus-covid-19-2019-ncov-data-repository-confirmed-deaths-in-the-us.csv')
+head(esri_covid)
+head(jh)
 
 
 
