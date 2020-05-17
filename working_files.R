@@ -30,8 +30,12 @@ library(tidyverse)
 clinical_spectrum <- read_csv('clinical-spectrum.csv')
 esri_covid <- read_csv('uncover/esri_covid-19/esri_covid-19/cdcs-social-vulnerability-index-svi-2016-overall-svi-census-tract-level.csv')
 jh <- read_csv('uncover/johns_hopkins_csse/2019-novel-coronavirus-covid-19-2019-ncov-data-repository-confirmed-deaths-in-the-us.csv')
+einstein <- read_csv('uncover/einstein/diagnosis-of-covid-19-and-its-clinical-spectrum.csv')
+
 head(esri_covid)
 head(jh)
+head(einstein)
+
 
 
 
