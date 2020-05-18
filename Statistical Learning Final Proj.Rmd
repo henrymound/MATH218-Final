@@ -1,0 +1,180 @@
+---
+title: "MATH 0218 Final Project: Covid-19"
+author: "Walter Conrad, Jack Decker, and Henry Mound"
+date: "5/18/2020"
+output: html_document
+---
+
+For our final project, we located a collection of data sets containing information regarding the current coronavirus pandemic. The data can be found on kaggle.com under the headline "Uncover Covid-19 Challenge". This collection contains dozens of data sets covering topics from Covid-19 cases, airport closings, mobility, ICU admissions, blood work of patients, and more. We do not use most of these files, but have chosen a few of them to conduct our analysis on. They are mentioned throughout the project when we use them. In our project, we use various statistical models, at first to examine which types of counties are more susceptible to the virus at large, and then to examine which types of patients are more at risk individually.
+
+One of the most basic, yet useful, statistical models is ordinary least squares linear regression. Using county-level data on Covid-19 cases and various demographic qualities of counties, we attempt to predict case rates and death rates with several variables of interest.
+
+We start by loading packages we will need:
+
+```{r}
+library(tidyverse)
+library(stringr)
+```
+
+Now we load three datasets for county-level data. The first contains information on Covid-19 cases and deaths by county, the next contains health data by county, and the last contains social vulnerability data by county. 
+
+```{r}
+county_cases <- read_csv(file.choose())
+county_health_data <- read_csv(file.choose())
+county_svi <- read_csv(file.choose())
+```
+
+Now we clean the data and mutate new columns, one is a case rate and the other is a mortality rate (number of deaths per cases).
+
+```{r}
+aian_indexes <- str_detect(colnames(county_health_data), 'aian')
+black_indexes <- str_detect(colnames(county_health_data), 'black')
+hispanic_indexes <- str_detect(colnames(county_health_data), 'hispanic')
+white_indexes <- str_detect(colnames(county_health_data), 'white')
+asian_indexes <- str_detect(colnames(county_health_data), 'asian')
+percent_indexes <- str_detect(colnames(county_health_data), '95percent')
+
+indexes <- NULL
+
+for(i in 1:507) {
+  if(percent_indexes[i] == TRUE ||
+     asian_indexes[i] == TRUE ||
+     aian_indexes[i] == TRUE ||
+     black_indexes[i] == TRUE ||
+     hispanic_indexes[i] == TRUE ||
+     white_indexes[i] == TRUE) {
+      
+      indexes[i] = i
+    }
+  else{
+    indexes[i] = 9
+  }
+}
+
+county_health_data_clean <- county_health_data[,-c(unique(indexes))]
+
+health_and_cases <- left_join(county_cases,
+                              county_health_data_clean,
+                              by = c('fips'))
+
+county_svi_cut <- county_svi[,-c(1:4)]
+
+M_indexes <- str_detect(colnames(county_svi_cut), 'M_')
+MP_indexes <- str_detect(colnames(county_svi_cut), 'MP_')
+
+indexes2 <- NULL
+
+for (i in 1:119) {
+  
+  if(M_indexes[i] == TRUE ||
+     MP_indexes[i] == TRUE) {
+    indexes2[i] = i
+  }
+  else{
+    indexes2[i] = 5
+  }
+}
+
+county_svi_subset <- county_svi_cut[,-c(unique(indexes2))]
+
+colnames(county_svi_subset)[2] = 'fips'
+
+county_svi_subset$fips <- as.numeric(county_svi_subset$fips) 
+
+county_overall <- left_join(health_and_cases,
+                           county_svi_subset,
+                           by = c('fips'))
+
+county_overall_subset <- county_overall %>%
+  filter(date == '4/27/2020') %>% 
+  filter(!is.na(fips))
+
+county_overall_subset <- county_overall_subset %>%
+  mutate(covid_caserate = cases/population) %>%
+  mutate(covid_deathrate = deaths/cases)
+```
+
+Now, we are ready to run some linear regression. Let's look at a graph of mortality rate and percent physically inactive. The hypothesis here is that the more physically inactive a county is, the higher the death rate will be there, as there has been scientific news linking fitness to lessening the risk of Covid-19. 
+
+```{r}
+county_overall_subset %>%
+  ggplot(aes(x = percent_physically_inactive, y = covid_deathrate)) +
+  geom_point() +
+  ggtitle("Covid-19 Mortality Rates in Counties by Physical Activity") +
+  xlab("Percent Physically Inactive") +
+  ylab("Covid-19 Mortality Rate") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14)) +
+  theme(axis.text.x = element_text(color="black", size = 10)) + 
+  theme(axis.text.y = element_text(color="black", size = 10)) +
+  theme(axis.title.x = element_text(color="black", size = 11)) +
+  theme(axis.title.y = element_text(color="black", size = 11)) +
+  theme(legend.position="none") +
+  theme(panel.grid.minor = element_blank())
+```
+
+It is quite hard to tell from this graph given the large amount of data points and their tendency to cluster toward lower values. Let's try zooming in to only death rates of 0 to 0.25. 
+
+```{r}
+county_overall_subset %>%
+  filter(covid_deathrate < 0.25) %>%
+  ggplot(aes(x = percent_physically_inactive, y = covid_deathrate)) +
+  geom_point() +
+  ggtitle("Covid-19 Mortality Rates in Counties by Physical Activity") +
+  xlab("Percent Physically Inactive") +
+  ylab("Covid-19 Mortality Rate") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 14)) +
+  theme(axis.text.x = element_text(color="black", size = 10)) + 
+  theme(axis.text.y = element_text(color="black", size = 10)) +
+  theme(axis.title.x = element_text(color="black", size = 11)) +
+  theme(axis.title.y = element_text(color="black", size = 11)) +
+  theme(legend.position="none") +
+  theme(panel.grid.minor = element_blank())
+```
+
+There still appears to not be too strong of a correlation, although often times it is hard to tell visually. We can use linear regression to determine if the relationship is statistically significantly above 0.
+
+```{r}
+lm.model.1 <- lm(covid_deathrate ~  percent_physically_inactive,
+             data = county_overall_subset)
+
+summary(lm.model.1)
+```
+
+In looking at the summary output, the coefficient on percent physically inactive is indeed positive, which is consistent with our intuition. However, the p-value attached to this is high, suggesting that we can not conclude that the relationship observed is statistically significant. This means that it could actually be 0 and the reason we observed what we did is just due to sampling variance. 
+
+One of the advantages of linear regression is that it can control for other relationships by adding them to the model. Physical inactivity may actually be significant once we control for things like how rural the county is, how much poverty is in the county, etc. We will run another regression model, this time with more variables.
+
+```{r}
+lm.model.2 <- lm(covid_deathrate ~  percent_physically_inactive
+                 + percent_rural + percent_smokers 
+                 + percent_adults_with_obesity 
+                 + primary_care_physicians_rate 
+                 + percent_fair_or_poor_health + ep_age65 
+                 + ep_crowd + e_groupq + ep_pov 
+                 + spl_themes + rpl_themes,
+             data = county_overall_subset)
+
+summary(lm.model.2)
+```
+
+In adding in many variables, we control for a lot of different characteristics of the county. It turns out that in this case, physical activity is still not statistically significant. However, two variables that we can be pretty sure have a significant relationship to the mortality rate of covid-19 are percent rural and estimated percentage of citizens above age 65. The second one is obvious; one of the main risk factors for passing away from the virus is age. The first one, percent rural, makes sense for case rates, as the more rural a county is, the less likely it is that covid-19 will spread quickly there. However, more rural counties, on average, have lower mortality rates, even after controlling for the health of the population and the poverty rate, among other variables. This could potentially be due to the fact that rural counties are experiencing lower case rates and therefore are able to treat the cases that they do have with more attention. 
+
+We can compare the effectiveness of the two models using a quantitative metric. Since linear regression models are not classifcation techniques, things like accuracy, precision, and recall do not apply. However, mean squared error (MSE) is a good default metric to use. Mean squared error represents the average squared distance that the actual data point is from the value the model predicts. 
+
+```{r}
+mean(lm.model.1$residuals^2)
+mean(lm.model.2$residuals^2)
+```
+
+Not surprisingly, the MSE of the second model, which includes more information for the model to predict on, is lower. However, not by much. This is because both models are pretty bad, in the sense that the relationships are often not significant. 
+
+Why is it that these models are performing quite poorly? One possible explanation is that they do not control for testing. The data we have on case rates and mortality rates inherently depends on how many tests are being given. Currently, there is a large issue of lack of tests in the U.S., which may inherently hide the actual relationship between case rates and mortality rates and the variables used in the models above. 
+
+Another explanation could just be that there is an element of arbitrariness involved in how Covid-19 has spread. Given how quickly this scenario is evolving, mortality rates in different counties could be subject to the somewhat unpredictable element of where the virus spread first. Over time, the predictive power of certain variables may appear, but for now, it could be getting masked by the fact that the virus is spreading quickly and just so happened to hit certain areas first. (Literature surrounding other viruses lends credence to this hypothesis, such as information about the flu, which has had many years to "stablize" all around the country. Such as the following article: https://psmag.com/social-justice/the-flu-hits-harder-in-poorer-neighborhoods. )
+
+Other models that can be used to graph relationships between two quantitative variables include splines and smoothing splines. These techniques capture non-linear relationships, which often invalidate linear regression. However, based on the graphs above, the data seems to be more scattered than representing any sort of relationship, so splines won't work. 
+
+Classification models, such as KNN, LDA, and random forests, are not easily used to predict quantitative outcomes. We could convert one of our variables of interest in this case to a categorical variable. For example, a binary indicator of whether the mortality rate is over, say, 3 percent. However, this loses a lot of information about the magnitude of the outcome variable. We will use classification models later on data more suited for them. 
+
