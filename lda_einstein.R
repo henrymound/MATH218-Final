@@ -61,6 +61,7 @@ plotData <- as.data.frame(
 plot( plotData[ , c(2, 3) ]),
       col=plotData[ ,1 ])
 
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
 # Predicting covid test results from blood
 clinical_spectrum_blood <- clinical_spectrum_clean[,c(7:20, 38)]
 lda1 <- lda(test_result ~ .,
@@ -69,7 +70,8 @@ lda1 <- lda(test_result ~ .,
 lda1Predict <- predict(lda1,
                        newdata=clinical_spectrum_blood
 )
-table(lda1Predict$class, clinical_spectrum_blood$test_result)
+lda1tab <- table(lda1Predict$class, clinical_spectrum_blood$test_result)
+accuracy(lda1tab)
 # Accuracy = (308+6)/362 = ~.8674
 
 
@@ -81,7 +83,8 @@ ldaICU <- lda(patient_addmited_to_intensive_care_unit_1_yes_0_no ~ .,
 ldaICUPredict <- predict(ldaICU,
                        newdata=clinical_spectrum_icu
 )
-table(ldaICUPredict$class, clinical_spectrum_icu$patient_addmited_to_intensive_care_unit_1_yes_0_no)
+ldaICUtab <- table(ldaICUPredict$class, clinical_spectrum_icu$patient_addmited_to_intensive_care_unit_1_yes_0_no)
+accuracy(ldaICUtab)
 # Accuracy = (334+6)/362 = ~93.9
 
 ldaICUPredictions1 <- ldaICUPredict$posterior[,2]
@@ -95,3 +98,31 @@ finalICUData1 %>%
   ylab("Monocytes") +
   labs(color = "Predicted ICU Prob")
 
+
+# NOW WE WILL TRY TO IMPLEMENT KNN
+# 70% training, 30% testing
+set.seed(2)
+train_ind <- sample(seq_len(nrow(clinical_spectrum_clean[,c(6:20)])),
+                    size = floor(0.75 * nrow(clinical_spectrum_clean[,c(6:20)])))
+trainICU <- clinical_spectrum_clean[,c(6:20)][train_ind, ]
+testICU <- clinical_spectrum_clean[,c(6:20)][-train_ind, ]
+
+pred <- knn(train = trainICU, 
+            test = testICU, 
+            cl = trainICU$patient_addmited_to_intensive_care_unit_1_yes_0_no, 
+            k = 1)
+tab <- table(pred, testICU$patient_addmited_to_intensive_care_unit_1_yes_0_no)
+accuracy(tab)
+
+# KNN for test results
+train_ind1 <- sample(seq_len(nrow(clinical_spectrum_clean[,c(7:20, 38)])),
+                    size = floor(0.75 * nrow(clinical_spectrum_clean[,c(7:20, 38)])))
+trainCovid <- clinical_spectrum_clean[,c(7:20, 38)][train_ind1, ]
+testCovid <- clinical_spectrum_clean[,c(7:20, 38)][-train_ind1, ]
+
+pred <- knn(train = trainCovid, 
+            test = testCovid, 
+            cl = trainCovid$test_result, 
+            k = 1)
+tab1 <- table(pred, testCovid$test_result)
+accuracy(tab1)

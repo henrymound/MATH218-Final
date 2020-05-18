@@ -1,0 +1,50 @@
+---
+title: "KNN and LDA"
+author: "Henry Mound"
+date: "5/18/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+
+```
+
+## Setup
+First we will load in our data set and clean it. 
+```{r cars}
+clinical_spectrum <- read_csv('clinical_spectrum/clinical-spectrum.csv')
+clinical_spectrum_filtered <- clinical_spectrum[,c(1:39)]
+clinical_spectrum_filtered <- clinical_spectrum_filtered[,-c(21, 28)]
+clinical_spectrum_clean <- clinical_spectrum_filtered %>%
+  na.omit()
+# Now, let's convert test result to binary
+clinical_spectrum_clean <- clinical_spectrum_clean %>%
+  mutate(test_result = ifelse(
+    clinical_spectrum_clean$sars_cov_2_exam_result == 'negative',
+    'A',
+    'B'))
+
+# Now, let's do the same so we can plot
+clinical_spectrum_cleanPlot <- clinical_spectrum_clean %>%
+  mutate(test_result = ifelse(
+    clinical_spectrum_clean$sars_cov_2_exam_result == 'negative',
+    'Blue',
+    'Red'))
+# 1. Plot
+plotData <- as.data.frame(
+  clinical_spectrum_cleanPlot[, c("test_result", "platelets", "hematocrit")])
+plot( plotData[ , c(2, 3) ],
+     col=plotData[ ,1 ])
+```
+
+## LDA
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
