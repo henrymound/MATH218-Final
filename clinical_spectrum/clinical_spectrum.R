@@ -4,9 +4,9 @@ library(tidyverse)
 
 
 #Goal 1: Use unsupervised learning to explore the data.
-# eg. Dendr ogram, Kmeans, Heirarchical
+# eg. Dendrogram, Kmeans, Heirarchical
 
-clinical_spectrum <- read_csv('clinical-spectrum.csv')
+clinical_spectrum <- read_csv('../clinical_spectrum/clinical-spectrum.csv')
 
 head(clinical_spectrum)
 
@@ -194,7 +194,7 @@ library(randomForest)
 library(ipred)
 
 #cleaning data before implementing random forest
-clinical_spectrum_clean_rf <- clinical_spectrum_clean[,-c(1,4:6,)]
+clinical_spectrum_clean_rf <- clinical_spectrum_clean[,-c(1,4:6)]
 
 clinical_spectrum_clean_rf <- clinical_spectrum_clean_rf %>%
   mutate(exam_result = ifelse(sars_cov_2_exam_result == 'negative', 0, 1))
