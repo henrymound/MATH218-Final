@@ -27,6 +27,7 @@ county_svi <- read_csv(file.choose())
 Now we clean the data and mutate new columns, one is a case rate and the other is a mortality rate (number of deaths per cases).
 
 ```{r}
+#cleaning health data
 aian_indexes <- str_detect(colnames(county_health_data), 'aian')
 black_indexes <- str_detect(colnames(county_health_data), 'black')
 hispanic_indexes <- str_detect(colnames(county_health_data), 'hispanic')
@@ -53,10 +54,12 @@ for(i in 1:507) {
 
 county_health_data_clean <- county_health_data[,-c(unique(indexes))]
 
+#health stats and county case rates data set
 health_and_cases <- left_join(county_cases,
                               county_health_data_clean,
                               by = c('fips'))
 
+#cleaning 
 county_svi_cut <- county_svi[,-c(1:4)]
 
 M_indexes <- str_detect(colnames(county_svi_cut), 'M_')
@@ -75,18 +78,20 @@ for (i in 1:119) {
   }
 }
 
+#cleaning social vulnerability data
 county_svi_subset <- county_svi_cut[,-c(unique(indexes2))]
 
 colnames(county_svi_subset)[2] = 'fips'
 
 county_svi_subset$fips <- as.numeric(county_svi_subset$fips) 
 
+#overall county data set, containing information about case rates, health statistics, and #social vulnerability metrics
 county_overall <- left_join(health_and_cases,
                            county_svi_subset,
                            by = c('fips'))
 
 county_overall_subset <- county_overall %>%
-  filter(date == '4/27/2020') %>% 
+  filter(date == '4/26/2020') %>% 
   filter(!is.na(fips))
 
 county_overall_subset <- county_overall_subset %>%
@@ -151,9 +156,9 @@ lm.model.2 <- lm(covid_deathrate ~  percent_physically_inactive
                  + percent_rural + percent_smokers 
                  + percent_adults_with_obesity 
                  + primary_care_physicians_rate 
-                 + percent_fair_or_poor_health + ep_age65 
-                 + ep_crowd + e_groupq + ep_pov 
-                 + spl_themes + rpl_themes,
+                 + percent_fair_or_poor_health + EP_AGE65 
+                 + EP_CROWD + E_GROUPQ + EP_POV 
+                 + SPL_THEMES + RPL_THEMES,
              data = county_overall_subset)
 
 summary(lm.model.2)
@@ -176,5 +181,7 @@ Another explanation could just be that there is an element of arbitrariness invo
 
 Other models that can be used to graph relationships between two quantitative variables include splines and smoothing splines. These techniques capture non-linear relationships, which often invalidate linear regression. However, based on the graphs above, the data seems to be more scattered than representing any sort of relationship, so splines won't work. 
 
-Classification models, such as KNN, LDA, and random forests, are not easily used to predict quantitative outcomes. We could convert one of our variables of interest in this case to a categorical variable. For example, a binary indicator of whether the mortality rate is over, say, 3 percent. However, this loses a lot of information about the magnitude of the outcome variable. We will use classification models later on data more suited for them. 
+Classification models, such as KNN, LDA, and random forests, are not easily used to predict quantitative outcomes. We could convert one of our variables of interest in this case to a categorical variable. For example, a binary indicator of whether the mortality rate is over, say, 3 percent. However, this loses a lot of information about the magnitude of the outcome variable. We will use classification models later on data more suited for them.
+
+It might make sense to use some unsupervised learning to see if we can uncover any other unexpected relationships in our data set that could explain the results we are seeing.
 
