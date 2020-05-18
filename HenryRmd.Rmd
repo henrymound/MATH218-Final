@@ -8,36 +8,69 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
-
+clinical_spectrum <- read_csv('clinical_spectrum/clinical-spectrum.csv')
 ```
 
 ## Setup
-First we will load in our data set and clean it. 
+We will be using the clinincal spectrum data set for K Nearest Neighbors (KNN) and Linear Discriminant Analysis (LDA) supervised learning. First, we will clean the data. This involves removing all of the NAs and only keeping relevant columns. 
 ```{r explore}
-clinical_spectrum <- read_csv('clinical_spectrum/clinical-spectrum.csv')
+# Remove all NAs and only keep relevant columns
 clinical_spectrum_filtered <- clinical_spectrum[,c(1:39)]
 clinical_spectrum_filtered <- clinical_spectrum_filtered[,-c(21, 28)]
 clinical_spectrum_clean <- clinical_spectrum_filtered %>%
   na.omit()
-# Now, let's convert test result to binary
-clinical_spectrum_clean <- clinical_spectrum_clean %>%
-  mutate(test_result = ifelse(
-    clinical_spectrum_clean$sars_cov_2_exam_result == 'negative',
-    'A',
-    'B'))
-
-# Now, let's do the same so we can plot
+# Now, convert test result to colors so we can plot. 
+# Red = positive COVID-19 test, Blue = negative
 clinical_spectrum_cleanPlot <- clinical_spectrum_clean %>%
   mutate(test_result = ifelse(
     clinical_spectrum_clean$sars_cov_2_exam_result == 'negative',
     'Blue',
     'Red'))
-# 1. Plot
+
+# Let's take a look at how platelet levels and hematocrit effect
+# test outcome
 plotData <- as.data.frame(
   clinical_spectrum_cleanPlot[, c("test_result", "platelets", "hematocrit")])
 plot( plotData[ , c(2, 3) ],
-     col=plotData[ ,1 ])
+     col=plotData[ ,1 ],
+     main = "COVID-19 Test Results by Platelets and Hematocrit")
+
+# How about leukocytes and age?
+plotData <- as.data.frame(
+  clinical_spectrum_cleanPlot[, c("test_result", "leukocytes", "patient_age_quantile")])
+plot( plotData[ , c(2, 3) ],
+      col=plotData[ ,1 ],
+     main = "COVID-19 Test Results by Leukocytes and Age")
+
 ```
+
+These charts show that in general, leukocyte levels, age, platelet count, and hematocrit are all correlated with COVID-19 test results. We tried several different variables, these four showed a promising relationship. In general, as platelet levels, hematocrit, and age increase, the likelyhood of a positive test increases. Whereas as leukocyte levels increase, the likelyhood of a positive test decreases. 
+
+But, how do these same four factors effect likelyhood of being admitted to the ICU?
+
+```{r explore2}
+# Now, convert icu result to colors so we can plot. 
+# Red = admitted, Blue = not
+clinical_spectrum_cleanPlot <- clinical_spectrum_clean %>%
+  mutate(icu_result = ifelse(
+    clinical_spectrum_clean$patient_addmited_to_intensive_care_unit_1_yes_0_no == 'FALSE',
+    'Blue',
+    'Red'))
+
+# Let's check out the save four variables for ICU admitance
+plotData <- as.data.frame(
+  clinical_spectrum_cleanPlot[, c("icu_result", "platelets", "hematocrit")])
+plot( plotData[ , c(2, 3) ],
+     col=plotData[ ,1 ],
+     main = "ICU Admittance by Platelets and Hematocrit")
+plotData <- as.data.frame(
+  clinical_spectrum_cleanPlot[, c("icu_result", "leukocytes", "patient_age_quantile")])
+plot( plotData[ , c(2, 3) ],
+      col=plotData[ ,1 ],
+     main = "ICU Admittance by Leukocytes and Age")
+```
+Unlike test results, these two charts indicate that the four factors have little to do with whether or not the patient was admitted to the hospital as the red and blue dots are relatively evenly spread.
+
 
 ## LDA
 
@@ -104,6 +137,11 @@ tab <- table(pred, testICU$patient_addmited_to_intensive_care_unit_1_yes_0_no)
 accuracy(tab)
 
 # KNN for test results
+clinical_spectrum_clean <- clinical_spectrum_clean %>%
+  mutate(test_result = ifelse(
+    clinical_spectrum_clean$sars_cov_2_exam_result == 'negative',
+    TRUE,
+    FALSE))
 train_ind1 <- sample(seq_len(nrow(clinical_spectrum_clean[,c(7:20, 38)])),
                     size = floor(0.75 * nrow(clinical_spectrum_clean[,c(7:20, 38)])))
 trainCovid <- clinical_spectrum_clean[,c(7:20, 38)][train_ind1, ]

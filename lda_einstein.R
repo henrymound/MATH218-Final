@@ -11,7 +11,7 @@ library(ISLR)
 #install_github("Displayr/flipMultivariates")
 #library(flipMultivariates)
 
-clinical_spectrum <- read_csv('clinical-spectrum.csv')
+clinical_spectrum <- read_csv('clinical_spectrum/clinical-spectrum.csv')
 clinical_spectrum_filtered <- clinical_spectrum[,c(1:39)]
 clinical_spectrum_filtered <- clinical_spectrum_filtered[,-c(21, 28)]
 clinical_spectrum_clean <- clinical_spectrum_filtered %>%
@@ -20,8 +20,8 @@ clinical_spectrum_clean <- clinical_spectrum_filtered %>%
 clinical_spectrum_clean <- clinical_spectrum_clean %>%
   mutate(test_result = ifelse(
     clinical_spectrum_clean$sars_cov_2_exam_result == 'negative',
-    'A',
-    'B'))
+    'Blue',
+    'Red'))
 # 1. Plot
 plotData <- as.data.frame(
   clinical_spectrum_clean[, c("test_result", "platelets", "hematocrit")])
@@ -115,6 +115,12 @@ tab <- table(pred, testICU$patient_addmited_to_intensive_care_unit_1_yes_0_no)
 accuracy(tab)
 
 # KNN for test results
+clinical_spectrum_clean <- clinical_spectrum_clean %>%
+  mutate(test_result = ifelse(
+    clinical_spectrum_clean$sars_cov_2_exam_result == 'negative',
+    TRUE,
+    FALSE))
+
 train_ind1 <- sample(seq_len(nrow(clinical_spectrum_clean[,c(7:20, 38)])),
                     size = floor(0.75 * nrow(clinical_spectrum_clean[,c(7:20, 38)])))
 trainCovid <- clinical_spectrum_clean[,c(7:20, 38)][train_ind1, ]
