@@ -131,6 +131,23 @@ ny_overall_testing <- ny_overall_testing %>%
   mutate(pop_density = E_TOTPOP / AREA_SQMI) %>%
   filter(date == '2020-04-26')
 
+ny_overall_testing_daterange <- ny_overall_testing %>%
+  filter(county.x != 'New York City') %>%
+  mutate(case_pop_proportion = cases / E_TOTPOP) %>%
+  mutate(death_pop_proportion = deaths / E_TOTPOP) %>%
+  mutate(pop_density = E_TOTPOP / AREA_SQMI) %>%
+  filter(date == '2020-04-26' |
+           date == '2020-04-25' |
+           date == '2020-04-24' |
+           date == '2020-04-23' |
+          date == '2020-04-22' |
+         date == '2020-04-21' |
+           date == '2020-04-20')
+
+ny_overall_testing_daterange %>%
+  select(cases, county.x, percent_rural) %>%
+  view()
+
 
 #verify the join worked
 ny_overall_testing[,c(1:5, 250:254)] %>%
@@ -165,6 +182,14 @@ ny_overall_testing_day <- ny_overall_testing %>%
   filter(date == '2020-04-26')
 
 
+ny_hclust_summary %>%
+  mutate(cluster_test = ifelse(county.x %in% c('Rockland','Westchester', 'Suffolk', 'Nassau'), 1, 0)) %>%
+  group_by(cluster_test) %>%
+  summarize_all(mean) %>%
+  view()
+
+ny_hclust_summary <- ny_overall_testing[,c(2,5,12,14,16,21,23,27,31,43,45,46,53,54,61,64,76,77,97,99,100,170)]
+
 ny_numbers <- ny_overall_testing_day[,c(12,14,16,21,23,27,31,43,45,46,53,54,61,64,76,77,97,99,100,170)]
 
 ny_numbers_scaled <- scale(ny_numbers)
@@ -177,7 +202,7 @@ plot(hc1)
 
 library(dendextend)
 
-#display dendrogram with the positive test results underneath the clusters
+
 hc1 %>%
   as.dendrogram() %>%
   place_labels(ny_overall_testing_day$county.x) %>%
@@ -194,6 +219,8 @@ hc1 %>%
   color_unique_labels() %>%
   plot()
 
+
+
 #heirarchical clustering hinted that overall population / population density could be a good metric to
 #train a linear model by
 
@@ -204,7 +231,7 @@ km1 <- kmeans(ny_numbers_scaled,
               4)
 
 
-ny_clusters <- cbind(ny_overall_testing_day, km1$cluster)
+ny_clusters <- cbind(ny_overall_testing, km1$cluster)
 
 ny_clusters %>%
   group_by(km1$cluster) %>%
@@ -215,6 +242,8 @@ ny_clusters %>%
 ny_clusters %>%
   filter(km1$cluster == 4) %>%
   select(county.x)
+
+
 
 
 tot <- NULL
@@ -232,7 +261,7 @@ ny_numbers_scaled %>%
   mutate(cluster = km1$cluster) %>%
   ggplot(aes(x = E_TOTPOP,
              y = cases)) +
-  geom_point(aes(color = factor(cluster)))
+  geom_bar(aes(color = factor(cluster)))
 
 
 km1$cluster == 2
@@ -240,7 +269,7 @@ km1$cluster == 2
 ny_overall_testing_day$county.x
 
 ###
-ny_pca_numbers <- ny_overall_testing_day[,c(5,12,14,21,170)]
+ny_pca_numbers <- ny_overall_testing[,c(5,97,99,158,167,170)]
 
 #ny_pca_numbers <- cbind(ny_pca_numbers, ny_overall_testing_day$county.x)
 
