@@ -13,7 +13,7 @@ library(tidyverse)
 
 ## Setup
 First we will load in our data set and clean it. 
-```{r cars}
+```{r explore}
 clinical_spectrum <- read_csv('clinical_spectrum/clinical-spectrum.csv')
 clinical_spectrum_filtered <- clinical_spectrum[,c(1:39)]
 clinical_spectrum_filtered <- clinical_spectrum_filtered[,-c(21, 28)]
@@ -41,10 +41,78 @@ plot( plotData[ , c(2, 3) ],
 
 ## LDA
 
-You can also embed plots, for example:
+Now we will start implementing LDA
+```{r lda}
+library(MASS)
+# We create a funciton for calculating accuracy from tab results
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+# Predicting covid test results from blood
+clinical_spectrum_blood <- clinical_spectrum_clean[,c(7:20, 38)]
+lda1 <- lda(test_result ~ .,
+            data = clinical_spectrum_blood,
+            CV = FALSE)
+lda1Predict <- predict(lda1,
+                       newdata=clinical_spectrum_blood
+)
+lda1tab <- table(lda1Predict$class, clinical_spectrum_blood$test_result)
+accuracy(lda1tab)
+
+# Predicting ICU test results from blood
+clinical_spectrum_icu <- clinical_spectrum_clean[,c(6:20)]
+ldaICU <- lda(patient_addmited_to_intensive_care_unit_1_yes_0_no ~ .,
+            data = clinical_spectrum_icu,
+            CV = FALSE)
+ldaICUPredict <- predict(ldaICU,
+                       newdata=clinical_spectrum_icu
+)
+ldaICUtab <- table(ldaICUPredict$class, clinical_spectrum_icu$patient_addmited_to_intensive_care_unit_1_yes_0_no)
+accuracy(ldaICUtab)
+# Accuracy = (334+6)/362 = ~93.9
+
+# Now, we will plot
+ldaICUPredictions1 <- ldaICUPredict$posterior[,2]
+finalICUData1 <- data.frame(clinical_spectrum_icu, ldaICUPredictions1)
+finalICUData1 %>%
+  ggplot(aes(x = leukocytes,
+             y = monocytes)) +
+  geom_point(aes(color = ldaICUPredictions1)) + 
+  ggtitle("ICU Predictions LDA") +
+  xlab("Leukocytes") +
+  ylab("Monocytes") +
+  labs(color = "Predicted ICU Prob")
+
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+# Now we will imlpement KNN
+``` {r KNN}
+library(class) # For KNN
+# NOW WE WILL TRY TO IMPLEMENT KNN
+# 70% training, 30% testing
+set.seed(2)
+train_ind <- sample(seq_len(nrow(clinical_spectrum_clean[,c(6:20)])),
+                    size = floor(0.75 * nrow(clinical_spectrum_clean[,c(6:20)])))
+trainICU <- clinical_spectrum_clean[,c(6:20)][train_ind, ]
+testICU <- clinical_spectrum_clean[,c(6:20)][-train_ind, ]
+
+pred <- knn(train = trainICU, 
+            test = testICU, 
+            cl = trainICU$patient_addmited_to_intensive_care_unit_1_yes_0_no, 
+            k = 1)
+tab <- table(pred, testICU$patient_addmited_to_intensive_care_unit_1_yes_0_no)
+accuracy(tab)
+
+# KNN for test results
+train_ind1 <- sample(seq_len(nrow(clinical_spectrum_clean[,c(7:20, 38)])),
+                    size = floor(0.75 * nrow(clinical_spectrum_clean[,c(7:20, 38)])))
+trainCovid <- clinical_spectrum_clean[,c(7:20, 38)][train_ind1, ]
+testCovid <- clinical_spectrum_clean[,c(7:20, 38)][-train_ind1, ]
+
+pred <- knn(train = trainCovid, 
+            test = testCovid, 
+            cl = trainCovid$test_result, 
+            k = 1)
+tab1 <- table(pred, testCovid$test_result)
+accuracy(tab1)
+```
