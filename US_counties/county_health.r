@@ -128,7 +128,9 @@ ny_overall_testing <- ny_overall_testing %>%
   filter(county.x != 'New York City') %>%
   mutate(case_pop_proportion = cases / E_TOTPOP) %>%
   mutate(death_pop_proportion = deaths / E_TOTPOP) %>%
-  mutate(pop_density = E_TOTPOP / AREA_SQMI)
+  mutate(pop_density = E_TOTPOP / AREA_SQMI) %>%
+  filter(date == '2020-04-26')
+
 
 #verify the join worked
 ny_overall_testing[,c(1:5, 250:254)] %>%
@@ -140,7 +142,7 @@ ny_overall_testing[,c(1:5, 250:254)] %>%
 lm1 <- lm(case_pop_proportion ~ cumulative_number_of_tests_performed + pop_density,
           data = ny_overall_testing)
 
-lm2 <- lm(cases ~ pop_density,
+lm2 <- lm(case_pop_proportion ~ pop_density + E_TOTPOP + cumulative_number_of_tests_performed,
           data = ny_overall_testing)
 
 summary(lm2)
