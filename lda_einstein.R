@@ -68,8 +68,10 @@ lda1 <- lda(test_result ~ .,
             CV = FALSE)
 lda1Predict <- predict(lda1,
                        newdata=clinical_spectrum_blood
-)$class
-table(lda1Predict, clinical_spectrum_blood$test_result)
+)
+table(lda1Predict$class, clinical_spectrum_blood$test_result)
+# Accuracy = (308+6)/362 = ~.8674
+
 
 # Predicting ICU test results from blood
 clinical_spectrum_icu <- clinical_spectrum_clean[,c(6:20)]
@@ -78,24 +80,18 @@ ldaICU <- lda(patient_addmited_to_intensive_care_unit_1_yes_0_no ~ .,
             CV = FALSE)
 ldaICUPredict <- predict(ldaICU,
                        newdata=clinical_spectrum_icu
-)$class
-table(lda1Predict, clinical_spectrum_icu$patient_addmited_to_intensive_care_unit_1_yes_0_no)
+)
+table(ldaICUPredict$class, clinical_spectrum_icu$patient_addmited_to_intensive_care_unit_1_yes_0_no)
+# Accuracy = (334+6)/362 = ~93.9
 
-# Accuracy = (308+6)/362 = ~.8674
-# Kappa = 
+ldaICUPredictions1 <- ldaICUPredict$posterior[,2]
+finalICUData1 <- data.frame(clinical_spectrum_icu, ldaICUPredictions1)
+finalICUData1 %>%
+  ggplot(aes(x = leukocytes,
+             y = monocytes)) +
+  geom_point(aes(color = ldaICUPredictions1)) + 
+  ggtitle("ICU Predictions LDA") +
+  xlab("Leukocytes") +
+  ylab("Monocytes") +
+  labs(color = "Predicted ICU Prob")
 
-NCAA.lda.1 <- lda(Winner ~ season.OR + season.OR1,
-                  data = final.data)
-
-predictions.1 <- predict(NCAA.lda.1)$posterior[,2]
-
-final.data.1 <- data.frame(final.data, predictions.1)
-
-final.data.1 %>%
-  ggplot(aes(x = season.OR,
-             y = season.OR1)) +
-  geom_point(aes(color = predictions.1)) + 
-  ggtitle("Offensive Rebounds LDA") +
-  xlab("Offensive Rebounds") +
-  ylab("Opponent's Offensive Rebounds") +
-  labs(color = "Predicted Win Prob")
