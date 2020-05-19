@@ -4,8 +4,19 @@ author: "Walter Conrad, Jack Decker, and Henry Mound"
 date: "5/18/2020"
 output: html_document
 ---
+```{r}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
 
-For our final project, we located a collection of data sets containing information regarding the current coronavirus pandemic. The data can be found on kaggle.com under the headline "Uncover Covid-19 Challenge". This collection contains dozens of data sets covering topics from Covid-19 cases, airport closings, mobility, ICU admissions, blood work of patients, and more. We do not use most of these files, but have chosen a few of them to conduct our analysis on. They are mentioned throughout the project when we use them. In our project, we use various statistical models, at first to examine which types of counties are more susceptible to the virus at large, and then to examine which types of patients are more at risk individually.
+## Intro 
+
+For our final project, we located a collection of data sets containing information regarding the current coronavirus pandemic. The data can be found on kaggle.com under the headline "Uncover Covid-19 Challenge". This collection contains dozens of data sets covering topics from Covid-19 cases, airport closings, mobility, ICU admissions, blood work of patients, and more. We do not use most of these files, but have chosen a few of them to conduct our analysis on. They are mentioned throughout the project when we use them. In our project, we use various statistical models, at first to examine which types of counties are more susceptible to the virus at large, and then to examine which types of patients are more at risk individually. As we go through the process, we keep a few research questions in mind: 
+- What health and social vulnerability characteristics might lead to higher infection rates in different counties? 
+- How can we use kernel smoothing splines and smoothing splines to approximate the rates of infections? What is the value of using these different approaches? 
+- What demographics of patients are more likely to be diagnosed with COVID-19? Admitted to the ICU? 
+- What blood characteristics are indicative of a patient with COVID-19? Admitted to the ICU?
+
+## Linear Regression 
 
 One of the most basic, yet useful, statistical models is ordinary least squares linear regression. Using county-level data on Covid-19 cases and various demographic qualities of counties, we attempt to predict case rates and death rates with several variables of interest.
 
@@ -16,6 +27,7 @@ library(tidyverse)
 library(stringr)
 library(dendextend)
 ```
+
 
 Now we load three datasets for county-level data. The first contains information on Covid-19 cases and deaths by county, the next contains health data by county, and the last contains social vulnerability data by county. 
 
@@ -176,7 +188,7 @@ mean(lm.model.2$residuals^2)
 
 Not surprisingly, the MSE of the second model, which includes more information for the model to predict on, is lower. However, not by much. This is because both models are pretty bad, in the sense that the relationships are often not significant. 
 
-Why is it that these models are performing quite poorly? One possible explanation is that they do not control for testing. The data we have on case rates and mortality rates inherently depends on how many tests are being given. Currently, there is a large issue of lack of tests in the U.S., which may inherently hide the actual relationship between case rates and mortality rates and the variables used in the models above. 
+Why is it that these models are performing quite poorly? One possible explanation is that they do not control for testing. The data we have on case rates and mortality rates inherently depends on how many tests are being given. Currently, there is a large issue of lack of tests in the U.S., which may inherently hide the actual relationship between case rates and mortality rates and the variables used in the models above. We will look at this later using New York testing data. 
 
 Another explanation could just be that there is an element of arbitrariness involved in how Covid-19 has spread. Given how quickly this scenario is evolving, mortality rates in different counties could be subject to the somewhat unpredictable element of where the virus spread first. Over time, the predictive power of certain variables may appear, but for now, it could be getting masked by the fact that the virus is spreading quickly and just so happened to hit certain areas first. (Literature surrounding other viruses lends credence to this hypothesis, such as information about the flu, which has had many years to "stablize" all around the country. Such as the following article: https://psmag.com/social-justice/the-flu-hits-harder-in-poorer-neighborhoods. )
 
@@ -185,6 +197,8 @@ Other models that can be used to graph relationships between two quantitative va
 Classification models, such as KNN, LDA, and random forests, are not easily used to predict quantitative outcomes. We could convert one of our variables of interest in this case to a categorical variable. For example, a binary indicator of whether the mortality rate is over, say, 3 percent. However, this loses a lot of information about the magnitude of the outcome variable. We will use classification models later on data more suited for them.
 
 It might make sense to use some unsupervised learning to see if we can uncover any other unexpected relationships in our data set that could explain the results we are seeing. To start, we'd like to explore the relationship between the number of tests and the rate of infection reported. We use a dataset that includes county-level testing information for the state of New York.
+
+### Unsupervised Learning with New York Testing Data
 
 ```{r}
 ny_tests <- read_csv('./US_counties/ny_testing.csv')
@@ -206,14 +220,16 @@ ny_overall_testing <- ny_overall_testing %>%
   filter(county.x != 'New York City') %>%
   mutate(case_pop_proportion = cases / E_TOTPOP) %>%
   mutate(death_pop_proportion = deaths / E_TOTPOP) %>%
-  mutate(pop_density = E_TOTPOP / AREA_SQMI) %>%
+  mutate(pop_density = E_TOTPOP / AREA_SQMI) 
+
+ny_overall_testing2 <- ny_overall_testing %>%
   filter(date == '2020-04-26')
 ```
 
 We also mutated a few columns to help create some new linear models in the future. We have added a population density column, a cases-to-population ratio response variable, and a deaths-to-population ratio response variable. It's time to see if unsupervised learning can help us create a better model. First we'll try hierarchical clustering. We subset the data by only including columns that seem relevant to predicting infection rate. We then scale these metrics, and then create a distance matrix with the results. Finally, using the distance matrix we can create a hierarchical clustering model for the data.
 
 ```{r}
-ny_numbers <- ny_overall_testing[,c(12,14,16,21,23,27,31,43,45,46,53,54,61,64,76,77,97,99,100,158, 167, 170)]
+ny_numbers <- ny_overall_testing2[,c(12,14,16,21,23,27,31,43,45,46,53,54,61,64,76,77,97,99,100,158, 167, 170)]
 
 ny_numbers_scaled <- scale(ny_numbers)
 
@@ -226,7 +242,7 @@ hc1 <- hclust(ny_numbers_dist)
 ```{r}
 hc1 %>%
   as.dendrogram() %>%
-  place_labels(ny_overall_testing$county.x) %>%
+  place_labels(ny_overall_testing2$county.x) %>%
   set('labels_cex', .3) %>%
   color_branches(k = 3) %>%
   color_unique_labels() %>%
@@ -234,7 +250,7 @@ hc1 %>%
 
 hc1 %>%
   as.dendrogram() %>%
-  place_labels(ny_overall_testing$cases) %>%
+  place_labels(ny_overall_testing2$cases) %>%
   set('labels_cex', .3) %>%
   color_branches(k = 3) %>%
   color_unique_labels() %>%
@@ -243,7 +259,7 @@ hc1 %>%
 Interestingly, some of our highest numbers of cases are all occurring in the same red cluser on the left of the dendrogram. The dendrogram indicates that these 4 counties - Rockland, Westchester, Nassau, and Suffolk - are all significantly different from the rest of the counties in New York across the predictor variables we chose. Their branch on the dendrogram occuras at around 15, the highest y-vale. Additionally, these 4 counties seem to have the most cases of covid. We summarize across the statistics we chose to see how the predictors vary in these 4 counties, this time including county name and case numbers to aid in visualization. 
 
 ```{r}
-ny_hclust_summary <- ny_overall_testing[,c(2,5,12,14,16,21,23,27,31,43,45,46,53,54,61,64,76,77,97,99,100,158,167,170)]
+ny_hclust_summary <- ny_overall_testing2[,c(2,5,12,14,16,21,23,27,31,43,45,46,53,54,61,64,76,77,97,99,100,158,167,170)]
 
 
 ny_hclust_summary %>%
@@ -277,18 +293,13 @@ km1 <- kmeans(ny_numbers_scaled,
               4)
 
 
-ny_clusters <- cbind(ny_overall_testing, km1$cluster)
+ny_clusters <- cbind(ny_overall_testing2, km1$cluster)
 
 ny_clusters %>%
   group_by(km1$cluster) %>%
   summarize(average_cases = mean(cases),
             average_deaths = mean(deaths),
             average_pop = mean(E_TOTPOP))
-
-ny_clusters %>%
-  filter(km1$cluster == 4) %>%
-  select(county.x)
-
 ```
 
 We see that cluster 4 has signicantly more cases than any of the other clusters - it also has the largest average population by quite a bit. Notably, the cluster with the second highest number of average cases has the second highest average population. The names of the 4 counties in cluster 4? The same 4 that we saw with the highest case rates in our hierarchical clustering.
@@ -309,9 +320,9 @@ Finally, we try PCA. We select the predictors that hierarchical clustering, kmea
 
 
 ```{r}
-ny_pca_numbers <- ny_overall_testing[,c(5,97,99,158,167,170)]
+ny_pca_numbers <- ny_overall_testing2[,c(5,97,99,158,167,170)]
 
-row.names(ny_pca_numbers) <- ny_overall_testing$county.x
+row.names(ny_pca_numbers) <- ny_overall_testing2$county.x
 
 #ok let's try to reduce our variables using PCA
 pca1 <- prcomp(ny_pca_numbers,
@@ -319,7 +330,7 @@ pca1 <- prcomp(ny_pca_numbers,
 
 library(pls)
 
-biplot(pca1, xlim=c(0, 0.5), ylim=c(-0.2, 0.4))
+#biplot(pca1, xlim=c(0, 0.5), ylim=c(-0.2, 0.4))
 biplot(pca1)
 ```
 
@@ -331,7 +342,7 @@ With what we've learned from these unsupervised learning methods, we attempt to 
 
 ```{r}
 lm.model.3 <- lm(cases ~ E_TOTPOP + percent_rural + overcrowding + percent_severe_housing_problems + EP_AGE65,
-              data = ny_overall_testing)
+              data = ny_overall_testing2)
 
 summary(lm.model.3)
 
@@ -341,7 +352,7 @@ Wow, our R-squared value for this model is significantly higher than our previou
 
 ```{r}
 lm.model.4 <- lm(cases ~ E_TOTPOP + percent_rural + overcrowding + cumulative_number_of_tests_performed,
-              data = ny_overall_testing)
+              data = ny_overall_testing2)
 
 summary(lm.model.4)
 ```
@@ -413,7 +424,7 @@ mostcase_counties2 <- as.data.frame(ny_overall_testing) %>%
   filter(county.x != 'New York City') %>%
   mutate(first_case = ifelse(cases>0, 1, 0)) %>%
   filter(first_case == 1) %>%
-  #filter(date == '2020-04-27') %>%
+  filter(date == '2020-04-27') %>%
   arrange(-cases) %>%
   head(5) %>%
   select(county.x)
@@ -434,8 +445,7 @@ for (i in 1:47) {
     date_nums[start_index+j] = i
   }
 }
-```
-```{r}
+
 #add date number columns, represents number of days after March 12
 ny_top5_datenums <- cbind(ny_top5, date_nums)
 
@@ -665,6 +675,232 @@ top5_caseplot +
 
 Oh wow do those smoothing splines look good! Looking at the rmses, smoothing splines outperform both basic splines and kernel smoothing - one wonders if in fact we may have overfitted the data. When working with any of the techniques above, we must remember that they are effective at interpolation of our data, but not at extrapolation. Our rmse values are very low for all three models, but the predictive power of the models comes from the date numbers that we provide - trying to predict outside this range would not produce realistic resuls.
 
+While kernel smoothing and splines might be common visualizations to show the need for "flattening the curve," because they do not provide an opportunity for extrapolation, we don't see much other value in using these techniques in this context. 
+
+Now we will explore how bloodwork factors into COVID-19 testing results and ICU admittance with LDA and KNN. 
+
+## LDA and KNN
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+clinical_spectrum <- read_csv('clinical_spectrum/clinical-spectrum.csv')
+```
+
+### Setup
+We will be using the clinical spectrum data set for K Nearest Neighbors (KNN) and Linear Discriminant Analysis (LDA) supervised learning. First, we will clean the data. This involves removing all of the NAs and only keeping relevant columns. 
+
+```{r explore}
+# Remove all NAs and only keep relevant columns
+clinical_spectrum_filtered <- clinical_spectrum[,c(1:39)]
+clinical_spectrum_filtered <- clinical_spectrum_filtered[,-c(21, 28)]
+clinical_spectrum_clean <- clinical_spectrum_filtered %>%
+  na.omit()
+# Now, convert test result to colors so we can plot. 
+# Red = positive COVID-19 test, Blue = negative
+clinical_spectrum_cleanPlot <- clinical_spectrum_clean %>%
+  mutate(test_result = ifelse(
+    clinical_spectrum_clean$sars_cov_2_exam_result == 'negative',
+    'Blue',
+    'Red'))
+
+# Let's take a look at how platelet levels and hematocrit effect
+# test outcome
+plotData <- as.data.frame(
+  clinical_spectrum_cleanPlot[, c("test_result", "platelets", "hematocrit")])
+plot( plotData[ , c(2, 3) ],
+     col=plotData[ ,1 ],
+     main = "COVID-19 Test Results by Platelets and Hematocrit")
+
+# How about leukocytes and age?
+plotData <- as.data.frame(
+  clinical_spectrum_cleanPlot[, c("test_result", "leukocytes", "patient_age_quantile")])
+plot( plotData[ , c(2, 3) ],
+      col=plotData[ ,1 ],
+     main = "COVID-19 Test Results by Leukocytes and Age")
+
+```
+
+These charts show that in general, leukocyte levels, age, platelet count, and hematocrit are all correlated with COVID-19 test results. We tried several different variables, these four showed a promising relationship. In general, as platelet levels, hematocrit, and age increase, the likelihood of a positive test increases. Whereas as leukocyte levels increase, the likelyhood of a positive test decreases. 
+
+But, how do these same four factors effect likelihood of being admitted to the ICU?
+
+```{r explore2}
+# Now, convert icu result to colors so we can plot. 
+# Red = admitted, Blue = not
+clinical_spectrum_cleanPlot <- clinical_spectrum_clean %>%
+  mutate(icu_result = ifelse(
+    clinical_spectrum_clean$patient_addmited_to_intensive_care_unit_1_yes_0_no == 'FALSE',
+    'Blue',
+    'Red'))
+
+# Let's check out the save four variables for ICU admittance
+plotData <- as.data.frame(
+  clinical_spectrum_cleanPlot[, c("icu_result", "platelets", "hematocrit")])
+plot( plotData[ , c(2, 3) ],
+     col=plotData[ ,1 ],
+     main = "ICU Admittance by Platelets and Hematocrit")
+plotData <- as.data.frame(
+  clinical_spectrum_cleanPlot[, c("icu_result", "leukocytes", "patient_age_quantile")])
+plot( plotData[ , c(2, 3) ],
+      col=plotData[ ,1 ],
+     main = "ICU Admittance by Leukocytes and Age")
+```
+
+Unlike test results, these two charts indicate that the four factors have little to do with whether or not the patient was admitted to the ICU as the red and blue dots are relatively evenly spread.
+
+
+### LDA
+
+Now we will start implementing LDA.
+```{r lda}
+library(MASS)
+library(fmsb)
+# We create a funciton for calculating accuracy from tab results
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+precision <- function(x){x[4]/(x[4] + x[2])}
+recall <- function(x){x[4]/(x[4] + x[3])}
+
+# Let's clean up the test results (A = negative, B = positive)
+clinical_spectrum_clean <- clinical_spectrum_clean %>%
+  mutate(test_result = ifelse(
+    clinical_spectrum_clean$sars_cov_2_exam_result == 'negative',
+    'A',
+    'B'))
+
+# Predicting covid test results from blood
+clinical_spectrum_blood <- clinical_spectrum_clean[,c(7:20, 38)]
+lda1 <- lda(test_result ~ .,
+            data = clinical_spectrum_blood,
+            CV = FALSE)
+lda1Predict <- predict(lda1,
+                       newdata=clinical_spectrum_blood
+)
+lda1tab <- table(lda1Predict$class, clinical_spectrum_blood$test_result)
+# Let's calculate accuracy and kappa
+lda1tab
+
+cat("Accuracy: ", accuracy(lda1tab), "\n")
+cat("Precision: ", precision(lda1tab), "\n")
+cat("Recall: ", recall(lda1tab), "\n")
+
+lda1kappa <- Kappa.test(lda1tab)
+cat("Kappa: ", as.numeric(lda1kappa$Result[2]), " ", lda1kappa$Judgement)
+```
+
+Linear Discriminant Analysis implemented on this data set with all variables yields an 86.74% accuracy for predicting whether or not a patient has COVID-19. However, Kappa might be a better indication of the algorithm's performance because if LDA predicts no COVID 100% of the time, the accuracy would still be high. Here, with a kappa value of 0.16, we see that LDA does not do a great job of predicting COVID. Kappa is a better metric of performance than accuracy because it accounts for likelihood of having a correct classification by chance. Precision and recall are also important for taking into account false positives and negatives. Recall is especially telling here with a low value of 0.12, saying that the algorithm is predicting positive only 6/50 times. This is very dangerous in a medical setting especially, where a false negative can lead to a patient not getting treatment. In this instance, our algorithm is overpredicting no COVID. 
+
+What about ICU rates?
+
+```{r}
+# Predicting ICU test results from blood
+clinical_spectrum_icu <- clinical_spectrum_clean[,c(6:20)]
+ldaICU <- lda(patient_addmited_to_intensive_care_unit_1_yes_0_no ~ .,
+            data = clinical_spectrum_icu,
+            CV = FALSE)
+ldaICUPredict <- predict(ldaICU,
+                       newdata=clinical_spectrum_icu
+)
+ldaICUtab <- table(ldaICUPredict$class, clinical_spectrum_icu$patient_addmited_to_intensive_care_unit_1_yes_0_no)
+ldaICUtab
+cat("Accuracy: ", accuracy(ldaICUtab), "\n")
+cat("Precision: ", precision(ldaICUtab), "\n")
+cat("Recall: ", recall(ldaICUtab), "\n")
+
+lda1kappa <- Kappa.test(ldaICUtab)
+cat("Kappa: ", as.numeric(lda1kappa$Result[2]), " ", lda1kappa$Judgement)
+```
+
+Linear Discriminant Analysis for predicting ICU admittance implemented on this data set with all variables yields an 93.92% accuracy. In addition to higher accuracy than COVID results, this LDA has a higher kappa value of 0.32, and a higher recall of 0.27. These results indicate that your bloodwork is a better indicator of whether a patient is admitted to the ICU than whether or not they have COVID. 
+
+Interesting. Let's plot to see what is going on.
+
+``` {r}
+# Now, we will plot
+ldaICUPredictions1 <- ldaICUPredict$posterior[,2]
+finalICUData1 <- data.frame(clinical_spectrum_icu, ldaICUPredictions1)
+finalICUData1 %>%
+  ggplot(aes(x = leukocytes,
+             y = monocytes)) +
+  geom_point(aes(color = ldaICUPredictions1)) + 
+  ggtitle("ICU Predictions LDA") +
+  xlab("Leukocytes") +
+  ylab("Monocytes") +
+  labs(color = "Predicted ICU Prob")
+
+ldaTestResultPredictions <- lda1Predict$posterior[,2]
+finalICUData2 <- data.frame(clinical_spectrum_icu, ldaTestResultPredictions)
+finalICUData2 %>%
+  ggplot(aes(x = leukocytes,
+             y = monocytes)) +
+  geom_point(aes(color = ldaTestResultPredictions)) + 
+  ggtitle("Covid Test Result Predictions LDA") +
+  xlab("Leukocytes") +
+  ylab("Monocytes") +
+  labs(color = "Predicted ICU Prob")
+
+```
+
+These graphs show interesting results.The predicted COVID-19 positive test results probability is higher when monocytes are higher and leukocytes are lower (top-left), wheras the predicted ICU probability is higher in the opposite conditions, when leukocyte levels are higher and monocytes are lover (bottom-right).
+
+
+### KNN
+
+``` {r KNN}
+library(class) # For KNN
+set.seed(2)
+# We will split the data into 75% training, 25% testing
+train_ind <- sample(seq_len(nrow(clinical_spectrum_clean[,c(6:20)])),
+                    size = floor(0.75 * nrow(clinical_spectrum_clean[,c(6:20)])))
+trainICU <- clinical_spectrum_clean[,c(6:20)][train_ind, ]
+testICU <- clinical_spectrum_clean[,c(6:20)][-train_ind, ]
+# We will predict for ICU admittance first
+pred <- knn(train = trainICU, 
+            test = testICU, 
+            cl = trainICU$patient_addmited_to_intensive_care_unit_1_yes_0_no, 
+            k = 1)
+tab <- table(pred, testICU$patient_addmited_to_intensive_care_unit_1_yes_0_no)
+
+tab
+cat("Accuracy: ", accuracy(tab), "\n")
+cat("Precision: ", precision(tab), "\n")
+cat("Recall: ", recall(tab), "\n")
+
+tabKappa <- Kappa.test(tab)
+cat("Kappa: ", as.numeric(tabKappa$Result[2]), " ", tabKappa$Judgement)
+```
+
+Our KNN implementation yields a 92.31% accuracy on the test data when predicting for ICU admittance, compared to 93.92% using LDA. The Kappa for LDA was 0.32, KNN's is significantly lower. 
+
+Let's try KNN to predict COVID-19 test results. 
+
+```{r}
+# KNN for test results
+clinical_spectrum_clean <- clinical_spectrum_clean %>%
+  mutate(test_result = ifelse(
+    clinical_spectrum_clean$sars_cov_2_exam_result == 'negative',
+    TRUE,
+    FALSE))
+train_ind1 <- sample(seq_len(nrow(clinical_spectrum_clean[,c(7:20, 38)])),
+                    size = floor(0.75 * nrow(clinical_spectrum_clean[,c(7:20, 38)])))
+trainCovid <- clinical_spectrum_clean[,c(7:20, 38)][train_ind1, ]
+testCovid <- clinical_spectrum_clean[,c(7:20, 38)][-train_ind1, ]
+
+pred <- knn(train = trainCovid, 
+            test = testCovid, 
+            cl = trainCovid$test_result, 
+            k = 1)
+tab1 <- table(pred, testCovid$test_result)
+tab1
+cat("Accuracy: ", accuracy(tab1), "\n")
+cat("Precision: ", precision(tab1), "\n")
+cat("Recall: ", recall(tab1), "\n")
+
+tab1Kappa <- Kappa.test(tab1)
+cat("Kappa: ", as.numeric(tab1Kappa$Result[2]), " ", tab1Kappa$Judgement)
+```
+
+Our KNN implementation yields a 86.81% accuracy on the test data when predicting for COVID-19 test result, compared to 86.74% using LDA. Furthermore, KNN's Kappa for COVID-19 prediction is 54.5% compared to 16.139% with LDA. Furthermore, the precision and recall are way higher in KNN (both over 90%). This shows that although algorithms may be comparable in terms of accuracy, when looking other metrics this algorithm clearly outperforms LDA. While LDA draws lines to classify data, KNN finds clusters. This shows that the data lends itself better to cluster categoriziation. 
 
 
 

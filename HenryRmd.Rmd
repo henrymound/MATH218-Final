@@ -13,6 +13,7 @@ clinical_spectrum <- read_csv('clinical_spectrum/clinical-spectrum.csv')
 
 ## Setup
 We will be using the clinical spectrum data set for K Nearest Neighbors (KNN) and Linear Discriminant Analysis (LDA) supervised learning. First, we will clean the data. This involves removing all of the NAs and only keeping relevant columns. 
+
 ```{r explore}
 # Remove all NAs and only keep relevant columns
 clinical_spectrum_filtered <- clinical_spectrum[,c(1:39)]
@@ -69,7 +70,8 @@ plot( plotData[ , c(2, 3) ],
       col=plotData[ ,1 ],
      main = "ICU Admittance by Leukocytes and Age")
 ```
-Unlike test results, these two charts indicate that the four factors have little to do with whether or not the patient was admitted to the hospital as the red and blue dots are relatively evenly spread.
+
+Unlike test results, these two charts indicate that the four factors have little to do with whether or not the patient was admitted to the ICU as the red and blue dots are relatively evenly spread.
 
 
 ## LDA
@@ -113,6 +115,7 @@ ldaICUPredict <- predict(ldaICU,
 ldaICUtab <- table(ldaICUPredict$class, clinical_spectrum_icu$patient_addmited_to_intensive_care_unit_1_yes_0_no)
 accuracy(ldaICUtab)
 ```
+
 Linear Discriminant Analysis for predicting ICU admittance implemented on this data set with all variables yields an 93.92% accuracy. Interesting. Let's plot to see what is going on.
 
 ``` {r}
@@ -140,6 +143,7 @@ finalICUData2 %>%
   labs(color = "Predicted ICU Prob")
 
 ```
+
 These graphs show interesting results.The predicted COVID-19 positive test results probability is higher when monocytes are higher and leukocytes are lower (top-left), wheras the predicted ICU probability is higher in the opposite conditions, when leukocyte levels are higher and monocytes are lover (bottom-right).
 
 
@@ -160,6 +164,7 @@ pred <- knn(train = trainICU,
 tab <- table(pred, testICU$patient_addmited_to_intensive_care_unit_1_yes_0_no)
 accuracy(tab)
 ```
+
 Our KNN implementation yields a 92.31% accuracy on the test data when predicting for ICU admittance, compared to 93.92% using LDA.
 
 Let's try KNN to predict COVID-19 test results. 
@@ -182,6 +187,7 @@ pred <- knn(train = trainCovid,
 tab1 <- table(pred, testCovid$test_result)
 accuracy(tab1)
 ```
-Our KNN implementation yields a 86.81% accuracy on the test data when predicting for ICU admittance, compared to 86.74% using LDA.
+
+Our KNN implementation yields a 86.81% accuracy on the test data when predicting for COVID-19 test result, compared to 86.74% using LDA.
 
 In both cases, KNN performs very comparably to LDA.
