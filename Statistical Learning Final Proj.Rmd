@@ -11,9 +11,10 @@ One of the most basic, yet useful, statistical models is ordinary least squares 
 
 We start by loading packages we will need:
 
-```{r}
+```{r echo=FALSE, include=FALSE, message=FALSE}
 library(tidyverse)
 library(stringr)
+library(dendextend)
 ```
 
 Now we load three datasets for county-level data. The first contains information on Covid-19 cases and deaths by county, the next contains health data by county, and the last contains social vulnerability data by county. 
@@ -408,11 +409,11 @@ ny_overall_testing %>%
 We see that the top 5 case-rate counties have significantly more cases than the others - we'll focus on these to make our graphical analysis more clear. First we'll try kernel smoothing to approximate these curves.
 
 ```{r}
-mostcase_counties2 <- ny_overall_testing %>%
+mostcase_counties2 <- as.data.frame(ny_overall_testing) %>%
   filter(county.x != 'New York City') %>%
   mutate(first_case = ifelse(cases>0, 1, 0)) %>%
   filter(first_case == 1) %>%
-  filter(date == '2020-04-27') %>%
+  #filter(date == '2020-04-27') %>%
   arrange(-cases) %>%
   head(5) %>%
   select(county.x)
@@ -433,7 +434,8 @@ for (i in 1:47) {
     date_nums[start_index+j] = i
   }
 }
-
+```
+```{r}
 #add date number columns, represents number of days after March 12
 ny_top5_datenums <- cbind(ny_top5, date_nums)
 
