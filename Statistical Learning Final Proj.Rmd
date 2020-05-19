@@ -374,4 +374,296 @@ summary(lm.model.5)
 We see that total population, percent rural, and overcrowding are all very significant predictors, and our R-squared value of .832 is quite high.
 
 
+We'd now like to see how well we can model the infection rate curves for different counties across New York.
+
+
+```{r}
+
+mostcase_counties <- ny_overall_testing %>%
+  filter(county.x != 'New York City') %>%
+  mutate(first_case = ifelse(cases>0, 1, 0)) %>%
+  filter(first_case == 1) %>%
+  filter(date == '2020-04-27') %>%
+  arrange(-cases) %>%
+  head(10) %>%
+  select(county.x)
+
+mostcase_counties
+
+#create plot showing case rate curves by county
+ny_overall_testing %>%
+  mutate(first_case = ifelse(cases>0, 1, 0)) %>%
+  filter(first_case == 1) %>%
+  filter(county.x %in% mostcase_counties$county.x) %>%
+  ggplot(aes(x = date,
+             y = cases)) +
+  geom_point(aes(color = factor(county.x))) +
+  ggtitle('Infection Rates in NY Counties') +
+  ylab('Number of Cases') +
+  xlab('Date')
+
+
+```
+
+We see that the top 5 case-rate counties have significantly more cases than the others - we'll focus on these to make our graphical analysis more clear. First we'll try kernel smoothing to approximate these curves.
+
+```{r}
+mostcase_counties2 <- ny_overall_testing %>%
+  filter(county.x != 'New York City') %>%
+  mutate(first_case = ifelse(cases>0, 1, 0)) %>%
+  filter(first_case == 1) %>%
+  filter(date == '2020-04-27') %>%
+  arrange(-cases) %>%
+  head(5) %>%
+  select(county.x)
+
+ny_top5 <- ny_overall_testing %>%
+  filter(county.x != 'New York City') %>%
+  mutate(first_case = ifelse(cases>0, 1, 0)) %>%
+  filter(first_case == 1) %>%
+  filter(county.x %in% mostcase_counties2$county.x)
+
+#first row with data from all counties
+ny_top5 <- ny_top5[-c(1:25),]
+
+date_nums = NULL
+for (i in 1:47) {
+  start_index = 5*(i-1)
+  for(j in 1:5){
+    date_nums[start_index+j] = i
+  }
+}
+
+#add date number columns, represents number of days after March 12
+ny_top5_datenums <- cbind(ny_top5, date_nums)
+
+top_counties <- list()
+for(i in 1:5){
+  top_counties[[i]] <- ny_top5_datenums %>%
+    filter(county.x == mostcase_counties2$county.x[i])
+}
+
+
+ksmooths <- list()
+#create a kernel smoothing model for each curve
+for(i in 1:5) {
+
+# use kernel smoothing to approximate total cases curve in the US
+currentksmooth <- ksmooth(x = top_counties[[i]]$date_nums,
+              y = top_counties[[i]]$cases,
+              kernel = 'normal',
+              bandwidth = 5,
+              x.points = top_counties[[i]]$date_num)
+
+ksmooths[[i]] <- currentksmooth
+}
+
+
+top5_caseplot <- ny_top5_datenums %>%
+  mutate(first_case = ifelse(cases>0, 1, 0)) %>%
+  filter(first_case == 1) %>%
+  filter(county.x %in% mostcase_counties2$county.x) %>%
+  ggplot(aes(x = date_nums,
+             y = cases)) +
+  geom_point(aes(color = factor(county.x))) +
+  ggtitle('Infection Rates in NY Counties') +
+  ylab('Number of Cases') +
+  xlab('Date')
+
+top5_caseplot +
+  geom_line(data = data.frame(x = ksmooths[[1]]$x,
+                              y = ksmooths[[1]]$y),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = ksmooths[[2]]$x,
+                              y = ksmooths[[2]]$y),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = ksmooths[[3]]$x,
+                              y = ksmooths[[3]]$y),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = ksmooths[[4]]$x,
+                              y = ksmooths[[4]]$y),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = ksmooths[[5]]$x,
+                              y = ksmooths[[5]]$y),
+            mapping = aes(x = x,
+                          y = y)) +
+  ggtitle('US Total Cases Plot Overlaid with Smoothing Kernels')
+```
+
+We see that kernel smoothing does a very good job of approximating the infection rate curves for these counties. We can quantify the error by calculating the root mean squared error for the kernel smoothing predictions compared to the actual case numbers.
+
+```{r}
+smooth_rmses <- list()
+for(i in 1:5) {
+#calculating rmse
+smooth_rmses[[i]] <- sqrt(mean(sum((ksmooths[[i]]$y - top_counties[[i]]$cases)^2)))
+}
+
+print(smooth_rmses)
+```
+
+Are these values for a root mean squared error good or bad? We can see how the values would change if we used a different bandwidth when calculating our smoothing function. Because all the counties use the same date numbers, we can use one to understand the effect of changing bandwidth.
+
+```{r}
+#Can we reduce rmse by changing bandwidth?
+
+tot_rmse <- NULL
+for(i in 1:20) {
+  k <- ksmooth(x = top_counties[[1]]$date_nums,
+               y = top_counties[[1]]$cases,
+               kernel = 'normal',
+               bandwidth = i,
+               x.points = top_counties[[1]]$date_num)
+  
+  tot_rmse[i] <- sqrt(mean(sum((k$y - top_counties[[1]]$cases)^2)))
+}
+
+plot(tot_rmse)
+```
+
+
+As we choose a wider bandwidth, our total rmse increases. We want to be careful that we don't overfit our data, but trying a bandwidth of 3 could improve our kernel smoothing models. Next we try approximating the infection curves using splines.
+
+```{r}
+library(splines)
+
+splines <- list()
+spline_preds <- list()
+spline_rmses <- list()
+
+for(i in 1:5) {
+#creating spline models
+splines[[i]] <- lm(top_counties[[i]]$cases ~ bs(top_counties[[i]]$date_nums, knots = c(5, 25, 45)),
+                        data = ny_top5_datenums)
+
+
+spline_preds[[i]] <- predict(splines[[i]], data.frame(top_counties[[i]]$date_nums))
+
+spline_rmses[[i]] <- sqrt(mean(sum((spline_preds[[i]] - top_counties[[i]]$cases)^2)))
+
+}
+
+print(spline_rmses)
+
+top5_caseplot +
+  geom_line(data = data.frame(x = top_counties[[i]]$date_nums,
+                              y = spline_preds[[1]]),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = top_counties[[i]]$date_nums,
+                              y = spline_preds[[2]]),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = top_counties[[i]]$date_nums,
+                              y = spline_preds[[3]]),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = top_counties[[i]]$date_nums,
+                              y = spline_preds[[4]]),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = top_counties[[i]]$date_nums,
+                              y = spline_preds[[5]]),
+            mapping = aes(x = x,
+                          y = y)) +
+  ggtitle('US Total Cases Plot Overlaid with Splines')
+
+
+```
+
+The splines are also doing a great job of approximating the infection curves. Comparing rmses, it appears that kernel smoothing slightly outperformed splines. However, we didn't try a range of knots. This time we'll try a range of knots across the whole date number range.
+
+```{r}
+knot_vals <- NULL
+for(i in 1:15) {
+  knot_vals[i] = 3*i
+}
+
+library(splines)
+
+splines2 <- list()
+spline_preds2 <- list()
+spline_rmses2 <- list()
+
+for(i in 1:5) {
+#creating spline models
+splines2[[i]] <- lm(top_counties[[i]]$cases ~ bs(top_counties[[i]]$date_nums, knots = knot_vals),
+                        data = ny_top5_datenums)
+
+
+spline_preds2[[i]] <- predict(splines2[[i]], data.frame(top_counties[[i]]$date_nums))
+
+spline_rmses2[[i]] <- sqrt(mean(sum((spline_preds2[[i]] - top_counties[[i]]$cases)^2)))
+
+}
+
+print(spline_rmses2)
+
+top5_caseplot +
+  geom_line(data = data.frame(x = top_counties[[i]]$date_nums,
+                              y = spline_preds2[[1]]),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = top_counties[[i]]$date_nums,
+                              y = spline_preds2[[2]]),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = top_counties[[i]]$date_nums,
+                              y = spline_preds2[[3]]),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = top_counties[[i]]$date_nums,
+                              y = spline_preds2[[4]]),
+            mapping = aes(x = x,
+                          y = y)) +
+  geom_line(data = data.frame(x = top_counties[[i]]$date_nums,
+                              y = spline_preds2[[5]]),
+            mapping = aes(x = x,
+                          y = y)) +
+  ggtitle('US Total Cases Plot Overlaid with Splines')
+
+```
+
+Oh wow those splines look quite good! In fact, by adding knots, our splines now outperform the kernel smoothing by the metric of root mean squared error. Finally we try a smooth spline.
+
+```{r}
+smooth_splines <- list()
+smooth_spline_rmses <- list()
+
+for(i in 1:5) {
+#creating smooth spline models
+smooth_splines[[i]] <- smooth.spline(top_counties[[i]]$date_nums,
+                                    top_counties[[i]]$cases)
+
+smooth_spline_rmses[i] <- sqrt(mean(sum((smooth_splines[[i]]$y - top_counties[[i]]$cases)^2)))
+
+}
+
+print(smooth_spline_rmses)
+
+top5_caseplot +
+  geom_line(data = data.frame(date_nums = smooth_splines[[1]]$x,
+                              cases = smooth_splines[[1]]$y)) +
+  geom_line(data = data.frame(date_nums = smooth_splines[[2]]$x,
+                              cases = smooth_splines[[2]]$y)) +
+  geom_line(data = data.frame(date_nums = smooth_splines[[3]]$x,
+                              cases = smooth_splines[[3]]$y)) +
+  geom_line(data = data.frame(date_nums = smooth_splines[[4]]$x,
+                              cases = smooth_splines[[4]]$y)) +
+  geom_line(data = data.frame(date_nums = smooth_splines[[5]]$x,
+                              cases = smooth_splines[[5]]$y)) +
+ 
+  ggtitle('US Total Cases Plot Overlaid with Smoothing Splines')
+```
+
+
+Oh wow do those smoothing splines look good! Looking at the rmses, smoothing splines outperform both basic splines and kernel smoothing - one wonders if in fact we may have overfitted the data. When working with any of the techniques above, we must remember that they are effective at interpolation of our data, but not at extrapolation. Our rmse values are very low for all three models, but the predictive power of the models comes from the date numbers that we provide - trying to predict outside this range would not produce realistic resuls.
+
+
+
+
 
